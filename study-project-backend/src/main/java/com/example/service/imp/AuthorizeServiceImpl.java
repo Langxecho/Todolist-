@@ -13,6 +13,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -37,6 +38,8 @@ public class AuthorizeServiceImpl implements AuthorizeService {
     String from;
     @Resource
     StringRedisTemplate template;
+
+    BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
     @Override
     //这个方法是通过数据库来查询用户名密码来进行登录
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -58,12 +61,14 @@ public class AuthorizeServiceImpl implements AuthorizeService {
      5.用户在注册时再从redistribution里面取出对应键值对，然后看验证码是否一致
      **/
     @Override
-    public boolean sendValidateEmail(String email,String sessionId) {
+    public String sendValidateEmail(String email,String sessionId) {
         String key = "email:" + sessionId + ":" + email;
         if(Boolean.TRUE.equals(template.hasKey(key))){
             Long expire = Optional.ofNullable(template.getExpire(key, TimeUnit.SECONDS)).orElse(0L);
-            if (expire > 120){return false;}
-
+            if (expire > 120){return "请求频繁，请1分钟后尝试";}
+        }
+        if(mapper.findAccountByNameOrEmail(email) != null){
+            return "此邮箱已被注册";
         }
         Random random = new Random();
         int code = random.nextInt(899999) + 100000;
@@ -76,10 +81,33 @@ public class AuthorizeServiceImpl implements AuthorizeService {
             mailSender.send(message);
 
             template.opsForValue().set(key,String.valueOf(code),3, TimeUnit.MINUTES);
-            return true;
+            return null;
         }catch (MailException e){
             e.printStackTrace();
-            return false;
+            return "邮件发送失败，请联系管理员";
+        }
+
+    }
+
+    @Override
+    public String validateAndRegister(String username, String password, String email, String code,String sessionId) {
+        String key = "email:" + sessionId + ":" + email;
+        if (Boolean.TRUE.equals(template.hasKey(key))){
+            String s = template.opsForValue().get(key);
+            if (s == null) return "邮件验证码失效，请重新请求";
+            if (s.equals(code)){
+                password = bCryptPasswordEncoder.encode(password);
+                if (mapper.createAccount(username,password,email) > 0) {
+                    return null;
+                }
+                else {
+                    return "内部错误，请联系管理员";
+                }
+            }else {
+                return "验证码错误，请先检查后再提交";
+            }
+        }else{
+            return "请先请求一封验证码邮件";
         }
 
     }
