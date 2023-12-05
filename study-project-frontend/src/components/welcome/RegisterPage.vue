@@ -56,7 +56,7 @@ const validatePassword = (rule, value, callback) => {
 const rules = {
   username: [
     { validator: validateUsername, trigger: ['blur','change'] },
-    { min: 3, max: 5, message: '长度在 3 到 8 个字符', trigger: 'blur' }
+    { min: 3, max: 8, message: '长度在 3 到 8 个字符', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -75,7 +75,7 @@ const rules = {
   ]
 }
 const validateEmail = () => {
-  post('api/auth/valid-email',{
+  post('/api/auth/valid-register-email',{
     email: form.email
   },(message) => {
     ElMessage.success(message)
